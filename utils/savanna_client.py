@@ -20,76 +20,117 @@ class SavannaClient:
             "Content-Type": "application/json"
         }
 
-    def workspace_url(self):
-        return f"{self.base_url}/workgroups/{self.workgroup_id}/workspaces/{self.workspace_id}"
+    def build_url(self, path_template):
+        path = path_template.format(
+            workgroup_id=self.workgroup_id,
+            workspace_id=self.workspace_id
+        )
+        return f"{self.base_url}{path}"
 
-    def get_workspace_status(self):
-        url = self.workspace_url()
-        print("Final URL:", url)
+    def _request(self, method, url, headers=None, **kwargs):
+        print(f"\n{method.upper()} URL:", url)
 
-        response = requests.get(url, headers=self.headers, timeout=30)
+        if "json" in kwargs:
+            print("Payload:", kwargs["json"])
+
+        response = requests.request(
+            method=method,
+            url=url,
+            headers=headers or self.headers,
+            timeout=kwargs.pop("timeout", 60),
+            **kwargs
+        )
 
         print("Status Code:", response.status_code)
         print("Response Body:", response.text)
 
         return response
 
+    def workspace_url(self):
+        path = os.getenv(
+            "WORKSPACE_STATUS_PATH",
+            "/workgroups/{workgroup_id}/workspaces/{workspace_id}"
+        )
+        return self.build_url(path)
+
+    def get_workspace_status(self):
+        return self._request("get", self.workspace_url(), timeout=30)
+
     def set_auto_suspend_time(self, minutes):
+        path = os.getenv(
+            "AUTO_SUSPEND_PATH",
+            "/workgroups/{workgroup_id}/workspaces/{workspace_id}"
+        )
+
         payload = {
-            "autoSuspendMinutes": minutes
+            "auto_stop_minutes": minutes
         }
 
-        return requests.patch(
-            self.workspace_url(),
-            headers=self.headers,
+        return self._request(
+            "patch",
+            self.build_url(path),
             json=payload,
             timeout=30
         )
 
     def enable_auto_resume(self, enabled=True):
+        path = os.getenv(
+            "AUTO_RESUME_PATH",
+            "/workgroups/{workgroup_id}/workspaces/{workspace_id}"
+        )
+
         payload = {
-            "autoResume": enabled
+            "autoResume": enabled,
+            "auto_resume": enabled
         }
 
-        return requests.patch(
-            self.workspace_url(),
-            headers=self.headers,
+        return self._request(
+            "patch",
+            self.build_url(path),
             json=payload,
             timeout=30
         )
 
     def suspend_workspace(self):
-        return requests.post(
-            f"{self.workspace_url()}/suspend",
-            headers=self.headers,
+        path = os.getenv(
+            "SUSPEND_PATH",
+            "/workgroups/{workgroup_id}/workspaces/{workspace_id}/suspend"
+        )
+
+        return self._request(
+            "post",
+            self.build_url(path),
             timeout=60
         )
 
     def resume_workspace(self):
-        return requests.post(
-            f"{self.workspace_url()}/resume",
-            headers=self.headers,
+        path = os.getenv(
+            "RESUME_PATH",
+            "/workgroups/{workgroup_id}/workspaces/{workspace_id}/resume"
+        )
+
+        return self._request(
+            "post",
+            self.build_url(path),
             timeout=60
         )
 
     def run_query(self, params=None):
         if self.graph_name and self.query_name:
             url = f"{self.restpp_url}/query/{self.graph_name}/{self.query_name}"
-            print("Query URL:", url)
 
-            return requests.post(
+            return self._request(
+                "post",
                 url,
-                headers=self.headers,
                 json=params or {},
                 timeout=60
             )
 
         url = f"{self.restpp_url}/echo"
-        print("Echo URL:", url)
 
-        return requests.get(
+        return self._request(
+            "get",
             url,
-            headers=self.headers,
             timeout=60
         )
 
@@ -98,21 +139,27 @@ class SavannaClient:
         response.raise_for_status()
 
         data = response.json()
-        print("JSON Keys:", data.keys())
+        print("Full JSON:", data)
+
+        result = data.get("Result")
+
+        if isinstance(result, dict):
+            return (
+            result.get("status")
+            or result.get("state")
+            or result.get("workspace_status")
+            or result.get("workspaceState")
+            or result.get("desired_status")
+            or result.get("current_status")
+            or result.get("health")
+        )
 
         return (
-            data.get("status")
-            or data.get("state")
-            or data.get("workspaceStatus")
-            or data.get("workspace_state")
-            or data.get("phase")
-            or data.get("health")
-            or data.get("data", {}).get("status")
-            or data.get("data", {}).get("state")
-            or data.get("data", {}).get("phase")
-            or data.get("workspace", {}).get("status")
-            or data.get("workspace", {}).get("state")
-        )
+        data.get("status")
+        or data.get("state")
+        or data.get("workspace_status")
+        or data.get("workspaceState")
+    )
 
     def invalid_api_key_request(self):
         headers = {
@@ -120,7 +167,8 @@ class SavannaClient:
             "Content-Type": "application/json"
         }
 
-        return requests.get(
+        return self._request(
+            "get",
             self.workspace_url(),
             headers=headers,
             timeout=30
@@ -132,10 +180,15 @@ class SavannaClient:
             "00000000-0000-0000-0000-000000000000"
         )
 
-        url = f"{self.base_url}/workgroups/{self.workgroup_id}/workspaces/{fake_workspace_id}"
+        path = os.getenv(
+            "WORKSPACE_STATUS_PATH",
+            "/workgroups/{workgroup_id}/workspaces/{workspace_id}"
+        )
 
-        return requests.get(
+        url = f"{self.base_url}{path.format(workgroup_id=self.workgroup_id, workspace_id=fake_workspace_id)}"
+
+        return self._request(
+            "get",
             url,
-            headers=self.headers,
             timeout=30
         )

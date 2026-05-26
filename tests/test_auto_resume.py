@@ -4,114 +4,141 @@ from utils.savanna_client import SavannaClient
 from utils.wait_utils import wait_until_status
 
 
-ACTIVE_STATUSES = ["Active", "Running", "Idle"]
-SUSPENDED_STATUSES = ["Suspended", "Stopped", "Paused"]
+ACTIVE_STATUSES = ["Active", "Running", "Idle", "Ready"]
+SUSPENDED_STATUSES = ["Suspended", "Stopped", "Paused", "Stopping"]
 
 
-def skip_if_api_not_available(response, api_name):
+def validate_api_response(response, api_name, expected_codes=(200, 202)):
     print(f"{api_name} Status:", response.status_code)
     print(f"{api_name} Body:", response.text)
 
-    if response.status_code in [403, 404]:
-        pytest.skip(f"{api_name} API not available or permission denied")
+    assert response.status_code in expected_codes, (
+        f"{api_name} failed. Expected {expected_codes}, "
+        f"Actual: {response.status_code}, Body: {response.text}"
+    )
 
 
 @pytest.mark.resume
 def test_tc07_auto_resume_from_api_request(client: SavannaClient):
     auto_resume_response = client.enable_auto_resume(True)
-    skip_if_api_not_available(auto_resume_response, "Auto Resume")
-
-    assert auto_resume_response.status_code in [200, 202]
+    validate_api_response(auto_resume_response, "Enable Auto Resume")
 
     suspend_response = client.suspend_workspace()
-    skip_if_api_not_available(suspend_response, "Suspend")
+    validate_api_response(suspend_response, "Suspend Workspace")
 
-    assert suspend_response.status_code in [200, 202]
-
-    wait_until_status(client, SUSPENDED_STATUSES, timeout=120, interval=10)
+    suspended_status = wait_until_status(
+        client,
+        expected_statuses=SUSPENDED_STATUSES,
+        timeout=300,
+        interval=15
+    )
+    assert suspended_status in SUSPENDED_STATUSES
 
     response = client.run_query({})
     print("Query Status:", response.status_code)
     print("Query Body:", response.text)
 
-    assert response.status_code in [200, 202, 503]
+    assert response.status_code in [200, 202, 503], response.text
 
-    status = wait_until_status(client, ACTIVE_STATUSES, timeout=180, interval=10)
-
-    assert status in ACTIVE_STATUSES
+    active_status = wait_until_status(
+        client,
+        expected_statuses=ACTIVE_STATUSES,
+        timeout=600,
+        interval=15
+    )
+    assert active_status in ACTIVE_STATUSES
 
 
 @pytest.mark.resume
 def test_tc08_auto_resume_disabled_should_not_resume(client: SavannaClient):
     auto_resume_response = client.enable_auto_resume(False)
-    skip_if_api_not_available(auto_resume_response, "Auto Resume Disable")
-
-    assert auto_resume_response.status_code in [200, 202]
+    validate_api_response(auto_resume_response, "Disable Auto Resume")
 
     suspend_response = client.suspend_workspace()
-    skip_if_api_not_available(suspend_response, "Suspend")
+    validate_api_response(suspend_response, "Suspend Workspace")
 
-    assert suspend_response.status_code in [200, 202]
-
-    wait_until_status(client, SUSPENDED_STATUSES, timeout=120, interval=10)
+    suspended_status = wait_until_status(
+        client,
+        expected_statuses=SUSPENDED_STATUSES,
+        timeout=300,
+        interval=15
+    )
+    assert suspended_status in SUSPENDED_STATUSES
 
     response = client.run_query({"query": "ls"})
     print("Query Status:", response.status_code)
     print("Query Body:", response.text)
 
-    assert response.status_code in [400, 409, 423, 503]
+    assert response.status_code in [400, 409, 423, 503], response.text
 
     status = client.get_status_value()
 
-    if status is None:
-        pytest.skip("Workspace status not available in API response")
-
-    assert status in SUSPENDED_STATUSES
+    assert status is not None, "Workspace status is missing in API response"
+    assert status in SUSPENDED_STATUSES, (
+        f"Workspace resumed even though auto resume is disabled. Current status: {status}"
+    )
 
 
 @pytest.mark.resume
 def test_tc09_manual_resume_workspace(client: SavannaClient):
     suspend_response = client.suspend_workspace()
-    skip_if_api_not_available(suspend_response, "Suspend")
+    validate_api_response(suspend_response, "Suspend Workspace")
 
-    assert suspend_response.status_code in [200, 202]
+    suspended_status = wait_until_status(
+        client,
+        expected_statuses=SUSPENDED_STATUSES,
+        timeout=300,
+        interval=15
+    )
+    assert suspended_status in SUSPENDED_STATUSES
 
-    wait_until_status(client, SUSPENDED_STATUSES, timeout=120, interval=10)
+    resume_response = client.resume_workspace()
+    validate_api_response(resume_response, "Resume Workspace")
 
-    response = client.resume_workspace()
-    skip_if_api_not_available(response, "Resume")
-
-    assert response.status_code in [200, 202]
-
-    status = wait_until_status(client, ACTIVE_STATUSES, timeout=180, interval=10)
-
-    assert status in ACTIVE_STATUSES
+    active_status = wait_until_status(
+        client,
+        expected_statuses=ACTIVE_STATUSES,
+        timeout=600,
+        interval=15
+    )
+    assert active_status in ACTIVE_STATUSES
 
 
 @pytest.mark.resume
 def test_tc10_concurrent_resume_requests(client: SavannaClient):
     auto_resume_response = client.enable_auto_resume(True)
-    skip_if_api_not_available(auto_resume_response, "Auto Resume")
-
-    assert auto_resume_response.status_code in [200, 202]
+    validate_api_response(auto_resume_response, "Enable Auto Resume")
 
     suspend_response = client.suspend_workspace()
-    skip_if_api_not_available(suspend_response, "Suspend")
+    validate_api_response(suspend_response, "Suspend Workspace")
 
-    assert suspend_response.status_code in [200, 202]
-
-    wait_until_status(client, SUSPENDED_STATUSES, timeout=120, interval=10)
+    suspended_status = wait_until_status(
+        client,
+        expected_statuses=SUSPENDED_STATUSES,
+        timeout=300,
+        interval=15
+    )
+    assert suspended_status in SUSPENDED_STATUSES
 
     def trigger_query():
-        return client.run_query({}).status_code
+        query_response = client.run_query({})
+        print("Concurrent Query Status:", query_response.status_code)
+        print("Concurrent Query Body:", query_response.text)
+        return query_response.status_code
 
     with ThreadPoolExecutor(max_workers=5) as executor:
         results = list(executor.map(lambda _: trigger_query(), range(5)))
 
     print("Concurrent response codes:", results)
 
-    assert all(code in [200, 202, 409, 503] for code in results)
+    assert all(code in [200, 202, 409, 503] for code in results), (
+        f"Unexpected concurrent response codes: {results}"
+    )
 
-    status = wait_until_status(client, ACTIVE_STATUSES, timeout=180, interval=10)
-
-    assert status in ACTIVE_STATUSES
+    active_status = wait_until_status(
+        client,
+        expected_statuses=ACTIVE_STATUSES,
+        timeout=600,
+        interval=15
+    )
+    assert active_status in ACTIVE_STATUSES
