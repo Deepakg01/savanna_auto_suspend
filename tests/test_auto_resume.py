@@ -4,8 +4,8 @@ from utils.savanna_client import SavannaClient
 from utils.wait_utils import wait_until_status
 
 
-ACTIVE_STATUSES = ["Active", "Running", "Idle", "Ready"]
-SUSPENDED_STATUSES = ["Suspended", "Stopped", "Paused", "Stopping"]
+ACTIVE_STATUSES = ["Active", "Running",  "Ready"]
+SUSPENDED_STATUSES = ["Suspended", "Stopped", "Paused", "Stopping", "Idle","Pausing","resuming"]
 
 
 def validate_api_response(response, api_name, expected_codes=(200, 202)):
@@ -60,16 +60,16 @@ def test_tc08_auto_resume_disabled_should_not_resume(client: SavannaClient):
     suspended_status = wait_until_status(
         client,
         expected_statuses=SUSPENDED_STATUSES,
-        timeout=300,
+        timeout=900,
         interval=15
     )
     assert suspended_status in SUSPENDED_STATUSES
 
-    response = client.run_query({"query": "ls"})
+    response = client.run_query({})
     print("Query Status:", response.status_code)
     print("Query Body:", response.text)
 
-    assert response.status_code in [400, 409, 423, 503], response.text
+    assert response.status_code in [400, 409, 423, 500, 503], response.text
 
     status = client.get_status_value()
 

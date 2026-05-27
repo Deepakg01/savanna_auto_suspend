@@ -67,7 +67,7 @@ class SavannaClient:
         }
 
         return self._request(
-            "patch",
+            "put",
             self.build_url(path),
             json=payload,
             timeout=30
@@ -85,7 +85,7 @@ class SavannaClient:
         }
 
         return self._request(
-            "patch",
+            "put",
             self.build_url(path),
             json=payload,
             timeout=30
@@ -94,8 +94,9 @@ class SavannaClient:
     def suspend_workspace(self):
         path = os.getenv(
             "SUSPEND_PATH",
-            "/workgroups/{workgroup_id}/workspaces/{workspace_id}/suspend"
+            "/workgroups/{workgroup_id}/workspaces/{workspace_id}/pause"
         )
+        
 
         return self._request(
             "post",

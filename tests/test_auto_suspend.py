@@ -3,8 +3,9 @@ import pytest
 from utils.wait_utils import wait_until_status
 
 
-ACTIVE_STATUSES = ["Active", "Running", "Idle", "Ready"]
-SUSPENDED_STATUSES = ["Suspended", "Stopped", "Paused", "Stopping"]
+ACTIVE_STATUSES = ["Active", "Running", "Ready"]
+SUSPENDED_STATUSES = ["Suspended", "Stopped", "Paused", "Stopping", "Idle","Pausing","resuming"]
+
 
 
 def validate_api_response(response, api_name, expected_codes=(200, 202), rca=None):

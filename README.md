@@ -75,7 +75,7 @@ pytest -v -s
 
 Generate HTML Reports
 Full report
-pytest -v -s --html=reports/test_report.html --self-contained-html
+pytest -v -s --html=reports/test_final_report.html --self-contained-html
 
 
 Auto Suspend Scenarios:
